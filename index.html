@@ -234,6 +234,7 @@ input:focus { border-color: var(--ink); outline: none; }
   <main>
     <section class="view" id="view-train" aria-labelledby="t-train"></section>
     <section class="view" id="view-history" aria-labelledby="t-history" hidden></section>
+    <section class="view" id="view-templates" aria-labelledby="t-templates" hidden></section>
   </main>
   <nav aria-label="Main">
     <button type="button" data-tab="train" aria-selected="true">
@@ -243,6 +244,10 @@ input:focus { border-color: var(--ink); outline: none; }
     <button type="button" data-tab="history" aria-selected="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
       History
+    </button>
+    <button type="button" data-tab="templates" aria-selected="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M16.5 13.5v6M13.5 16.5h6"/></svg>
+      Templates
     </button>
   </nav>
 </div>
@@ -286,6 +291,7 @@ const PHASES = [
 const DEFAULTS = { name: '50 Seconds', inS: 5, holdS: 50, outS: 5, emptyS: 10, targetMin: 15, rounds: 13, roundsManual: false, readyS: 5, sound: true, vibrate: true };
 let S = Object.assign({}, DEFAULTS);
 let H = [];            // history entries
+let T = [];            // templates
 let touched = false;   // user changed settings this visit
 
 const cycleOf = c => c.inS + c.holdS + c.outS + c.emptyS;
@@ -300,10 +306,11 @@ const num = (el, lo, hi, fb) => { const v = parseInt(el.value, 10); return Numbe
 const patternHtml = e => '<span class="pat">' + PHASES.map(p => `<i style="--c:var(--p-${p.key})">${e[p.field]}</i>`).join('<u>·</u>') + '</span>';
 
 /* ---------- Storage: this phone only (localStorage) ---------- */
-const LS_H = 'apnoe.history.v1', LS_S = 'apnoe.settings.v1';
+const LS_H = 'apnoe.history.v1', LS_S = 'apnoe.settings.v1', LS_T = 'apnoe.templates.v1';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } };
 function saveHistory() { lsSet(LS_H, H); }
+function saveTemplates() { lsSet(LS_T, T); }
 let settingsTimer = null;
 function saveSettings(now) {
   clearTimeout(settingsTimer);
@@ -384,6 +391,7 @@ function buildTrain() {
     <div class="startwrap">
       <p class="err" id="start-err" role="alert"></p>
       <button type="button" class="btn" id="start">Start training</button>
+      <button type="button" class="btn ghost" id="save-tpl">Save as template</button>
     </div>`;
 }
 function syncFields() {
@@ -423,6 +431,7 @@ function bindTrain() {
     } else if (b.id === 'use-sugg') {
       S.roundsManual = false; touched = true; recompute(true); saveSettings();
     } else if (b.id === 'start') startSession();
+    else if (b.id === 'save-tpl') openTemplateEditor(null, S);
   });
   v.addEventListener('input', e => {
     const el = e.target; touched = true;
@@ -468,7 +477,7 @@ function renderHistory() {
     </div>
     ${items.length ? `<ul class="list">${rows}</ul>` : '<div class="empty">No trainings saved yet.<br>Finish a training and choose Save, or tap Add to enter one by hand.</div>'}
     <h2>Backup</h2>
-    <p class="sub" style="margin:0 0 10px">Your history is stored on this phone only. Save a copy now and then, for example before clearing browser data.</p>
+    <p class="sub" style="margin:0 0 10px">Your history and templates are stored on this phone only. Save a copy now and then, for example before clearing browser data.</p>
     <div class="btnrow two"><button type="button" class="btn ghost small" data-act="export">Save backup</button><button type="button" class="btn ghost small" data-act="import">Restore backup</button></div>
     <input type="file" id="imp" accept="application/json,.json" hidden>`;
 }
@@ -487,7 +496,7 @@ $('#view-history').addEventListener('click', e => {
 });
 function exportBackup() {
   try {
-    const blob = new Blob([JSON.stringify({ app: 'apnoe-trainer', version: 1, history: H }, null, 1)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ app: 'apnoe-trainer', version: 2, history: H, templates: T }, null, 1)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = `apnoe-backup-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -512,11 +521,84 @@ $('#view-history').addEventListener('change', ev => {
       const have = new Set(H.map(h => h.id));
       const fresh = list.filter(e => !have.has(e.id));
       H = H.concat(fresh); saveHistory(); renderHistory();
-      toast(fresh.length ? `Restored ${fresh.length} training${fresh.length === 1 ? '' : 's'}` : 'Nothing new to restore');
+      const haveT = new Set(T.map(t => t.id));
+      const freshT = (Array.isArray(data.templates) ? data.templates : []).map(cleanTemplate).filter(t => t && !haveT.has(t.id));
+      T = T.concat(freshT); saveTemplates(); renderTemplates();
+      const parts = [];
+      if (fresh.length) parts.push(`${fresh.length} training${fresh.length === 1 ? '' : 's'}`);
+      if (freshT.length) parts.push(`${freshT.length} template${freshT.length === 1 ? '' : 's'}`);
+      toast(parts.length ? `Restored ${parts.join(' and ')}` : 'Nothing new to restore');
     } catch (e) { toast('That file is not a valid backup'); }
   };
   r.readAsText(ev.target.files[0]); ev.target.value = '';
 });
+/* ---------- Templates ---------- */
+function cleanTemplate(x) {
+  if (!x || typeof x !== 'object') return null;
+  const n = (v, lo, hi) => clamp(Math.round(Number(v)) || 0, lo, hi);
+  const t = { id: String(x.id || '').slice(0, 40), name: String(x.name || 'Template').slice(0, 40),
+    inS: n(x.inS, 0, 600), holdS: n(x.holdS, 0, 600), outS: n(x.outS, 0, 600), emptyS: n(x.emptyS, 0, 600), targetMin: n(x.targetMin || 15, 1, 180) };
+  return t.id && cycleOf(t) > 0 ? t : null;
+}
+function renderTemplates() {
+  const rows = T.map(t => `<li class="row">
+      <button type="button" class="row-main" data-act="use" data-id="${esc(t.id)}" aria-label="Load ${esc(t.name)} into Train">
+        <span class="row-name">${esc(t.name)}</span>
+        <span class="row-meta">${patternHtml(t)}<span>Cycle ${fmt(cycleOf(t))}</span><span>${t.targetMin} min</span></span>
+      </button>
+      <button type="button" class="row-again" data-act="edit" data-id="${esc(t.id)}" aria-label="Edit ${esc(t.name)}">Edit</button>
+    </li>`).join('');
+  $('#view-templates').innerHTML = `
+    <div class="hhead"><div><h1 id="t-templates">Templates</h1><p class="sub" style="margin:0">Tap one to load it into Train.</p></div>
+      <button type="button" class="btn small" data-act="new">New</button></div>
+    ${T.length ? `<ul class="list">${rows}</ul>` : '<div class="empty">No templates yet.<br>Tap New, or set up a cycle on the Train tab and choose Save as template.</div>'}`;
+}
+$('#view-templates').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const t = T.find(x => x.id === b.dataset.id);
+  if (b.dataset.act === 'new') openTemplateEditor(null, Object.assign({}, DEFAULTS, { name: '' }));
+  else if (b.dataset.act === 'edit' && t) openTemplateEditor(t);
+  else if (b.dataset.act === 'use' && t) {
+    Object.assign(S, { name: t.name, inS: t.inS, holdS: t.holdS, outS: t.outS, emptyS: t.emptyS, targetMin: t.targetMin, roundsManual: false });
+    touched = true; syncFields(); saveSettings(true); showTab('train'); toast(`Loaded “${t.name}”`);
+  }
+});
+function openTemplateEditor(tpl, base) {
+  const isNew = !tpl;
+  const e = tpl || { id: '', name: base.name, inS: base.inS, holdS: base.holdS, outS: base.outS, emptyS: base.emptyS, targetMin: base.targetMin };
+  const f = PHASES.map(p => `<label class="field"><span>${p.setup} (s)</span><input id="e-${p.field}" type="number" inputmode="numeric" min="0" max="600" value="${e[p.field]}"></label>`).join('');
+  openDialog(`
+    <h3>${isNew ? 'New template' : 'Edit template'}</h3>
+    <label class="field"><span>Name</span><input id="e-name" type="text" maxlength="40" value="${esc(e.name)}" placeholder="e.g. 50 Seconds"></label>
+    <div class="grid4">${f}</div>
+    <label class="field"><span>Target length (minutes)</span><input id="e-targetMin" type="number" inputmode="numeric" min="1" max="180" value="${e.targetMin}"></label>
+    <p id="e-info"></p>
+    <p class="err" id="e-err" role="alert"></p>
+    <div class="btnrow" id="e-btns">
+      <button type="button" class="btn" id="e-save">${isNew ? 'Save template' : 'Save changes'}</button>
+      <div class="btnrow two"><button type="button" class="btn ghost" id="e-cancel">Cancel</button>${isNew ? '' : '<button type="button" class="btn ghost" id="e-del">Delete</button>'}</div>
+    </div>`, root => {
+    const read = () => { const v = (k, lo, hi, fb) => num($('#e-' + k, root), lo, hi, fb);
+      return { inS: v('inS', 0, 600, 0), holdS: v('holdS', 0, 600, 0), outS: v('outS', 0, 600, 0), emptyS: v('emptyS', 0, 600, 0), targetMin: v('targetMin', 1, 180, 15) }; };
+    const info = () => { const c = read(), cy = cycleOf(c), r = suggestRounds(c);
+      $('#e-info', root).textContent = cy > 0 ? `Cycle ${fmt(cy)} · ${r} rounds ≈ ${fmt(r * cy)}` : ''; };
+    root.addEventListener('input', info); info();
+    $('#e-cancel', root).onclick = closeDialog;
+    $('#e-save', root).onclick = () => {
+      const next = Object.assign({ id: e.id || ('t' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)), name: $('#e-name', root).value.trim() || 'Template' }, read());
+      if (cycleOf(next) <= 0) { $('#e-err', root).textContent = 'Set at least one phase above 0 seconds.'; return; }
+      if (isNew) T.push(next); else T[T.findIndex(x => x.id === e.id)] = next;
+      saveTemplates(); renderTemplates(); closeDialog(); toast(isNew ? 'Template saved' : 'Changes saved');
+    };
+    const del = $('#e-del', root);
+    if (del) del.onclick = () => {
+      $('#e-btns', root).innerHTML = `<p style="color:var(--ink);font-weight:600">Delete the template “${esc(e.name)}”?</p>
+        <div class="btnrow two"><button type="button" class="btn ghost" id="e-no">Keep it</button><button type="button" class="btn danger" id="e-yes">Delete</button></div>`;
+      $('#e-no', root).onclick = closeDialog;
+      $('#e-yes', root).onclick = () => { T = T.filter(x => x.id !== e.id); saveTemplates(); renderTemplates(); closeDialog(); toast('Template deleted'); };
+    };
+  });
+}
 const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
 function openEditor(entry) {
   const isNew = !entry;
@@ -557,7 +639,7 @@ function openEditor(entry) {
 
 /* ---------- Tabs ---------- */
 function showTab(t) {
-  $('#view-train').hidden = t !== 'train'; $('#view-history').hidden = t !== 'history';
+  for (const v of ['train', 'history', 'templates']) $('#view-' + v).hidden = v !== t;
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
   $('main').scrollTop = 0;
 }
@@ -745,7 +827,8 @@ function setupOffline() {
 buildTrain(); bindTrain();
 const savedS = lsGet(LS_S); if (savedS && typeof savedS === 'object') S = Object.assign({}, DEFAULTS, savedS);
 const savedH = lsGet(LS_H); if (Array.isArray(savedH)) H = savedH;
-syncFields(); renderHistory(); setupOffline();
+const savedT = lsGet(LS_T); if (Array.isArray(savedT)) T = savedT.map(cleanTemplate).filter(Boolean);
+syncFields(); renderHistory(); renderTemplates(); setupOffline();
 })();
 </script>
 </body>

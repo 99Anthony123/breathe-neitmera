@@ -33,6 +33,7 @@
   --p-hold: #3566d6;
   --p-out: #7f4fd0;
   --p-empty: #b86d12;
+  --hr: #d6334a;
   --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Figtree', 'Segoe UI', system-ui, sans-serif;
   --font-num: 'DM Mono', ui-monospace, 'Roboto Mono', monospace;
@@ -53,6 +54,7 @@
     --p-hold: #7da2ff;
     --p-out: #b894ff;
     --p-empty: #f0a95b;
+    --hr: #ff6b7d;
     color-scheme: dark;
   }
 }
@@ -70,6 +72,7 @@
   --p-hold: #7da2ff;
   --p-out: #b894ff;
   --p-empty: #f0a95b;
+  --hr: #ff6b7d;
   color-scheme: dark;
 }
 
@@ -194,6 +197,23 @@ input:focus { border-color: var(--ink); outline: none; }
 #upd[hidden] { display: none; }
 #upd button { min-height: 44px; border-radius: 10px; border: 0; background: var(--btn-ink); color: var(--btn); font-weight: 700; padding: 0 18px; }
 
+/* Heart rate */
+.hrcard { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 10px; }
+.hr-note { margin: 0; color: var(--muted); font-size: 15px; }
+.hr-live { display: flex; align-items: baseline; gap: 10px; }
+.hr-live b { font: 500 40px/1 var(--font-num); }
+.hr-live span { color: var(--muted); }
+.hr-live .hr-heart { color: var(--hr); font-size: 24px; }
+.hrbox { display: grid; gap: 8px; background: var(--surface2); border-radius: 14px; padding: 12px; }
+.hrbox h4 { margin: 0; font: 700 13px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.hrbox svg { width: 100%; height: auto; display: block; }
+.hrbox p { margin: 0; font-size: 14px; color: var(--muted); }
+.hrmeta { color: var(--hr); font-weight: 600; }
+.s-hr { display: flex; align-items: baseline; gap: 8px; font-weight: 600; color: var(--muted); }
+.s-hr[hidden] { display: none; }
+.s-hr b { font: 500 34px/1 var(--font-num); color: var(--hr); min-width: 2ch; text-align: right; }
+.s-hr .hr-heart { color: var(--hr); }
+
 /* Session */
 #session { position: fixed; inset: 0; z-index: 40; display: none; flex-direction: column; align-items: center; background: color-mix(in srgb, var(--phase) 17%, var(--bg)); transition: background .5s; padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 #session.open { display: flex; }
@@ -258,6 +278,7 @@ input:focus { border-color: var(--ink); outline: none; }
     <div class="s-phase" id="s-phase" aria-live="polite"></div>
     <div class="s-sub" id="s-sub"></div>
     <div class="cds" id="s-cds" role="group" aria-label="Phase countdowns"></div>
+    <div class="s-hr" id="s-hr" hidden><span class="hr-heart">♥</span><b id="s-hr-v">—</b><span id="s-hr-n">bpm</span></div>
     <div class="s-next" id="s-next"></div>
   </div>
   <p class="s-hint" id="s-hint"></p>
@@ -376,6 +397,8 @@ function buildTrain() {
       <button type="button" class="linkbtn" id="use-sugg" hidden></button>
       <div class="result"><span>Total training time</span><b id="total-len">0:00</b><span class="diff" id="diff-line"></span></div>
     </div>
+    <h2>Heart rate</h2>
+    <div class="hrcard" id="hr-card"></div>
     <h2>Options</h2>
     <div class="opts">
       <div class="ready-row"><label for="f-readyS">Get ready before start (seconds)</label>
@@ -432,6 +455,9 @@ function bindTrain() {
       S.roundsManual = false; touched = true; recompute(true); saveSettings();
     } else if (b.id === 'start') startSession();
     else if (b.id === 'save-tpl') openTemplateEditor(null, S);
+    else if (b.id === 'hr-connect') HR.connect(false);
+    else if (b.id === 'hr-all') HR.connect(true);
+    else if (b.id === 'hr-off') HR.disconnect();
   });
   v.addEventListener('input', e => {
     const el = e.target; touched = true;
@@ -462,7 +488,7 @@ function renderHistory() {
       <button type="button" class="row-main" data-act="edit" data-id="${esc(e.id)}" aria-label="Edit ${esc(e.name)}">
         <span class="row-name">${esc(e.name)}</span>
         <span class="row-date">${esc(when)}</span>
-        <span class="row-meta">${patternHtml(e)}<span>${rd}</span><span>${fmt(e.rounds * cycleOf(e))}</span></span>
+        <span class="row-meta">${patternHtml(e)}<span>${rd}</span><span>${fmt(e.rounds * cycleOf(e))}</span>${e.hr ? `<span class="hrmeta">♥ ${e.hr.avg} avg · ${e.hr.max} max</span>` : ''}</span>
       </button>
       <button type="button" class="row-again" data-act="again" data-id="${esc(e.id)}" aria-label="Train again with ${esc(e.name)}">Train<br>again</button>
     </li>`;
@@ -496,7 +522,7 @@ $('#view-history').addEventListener('click', e => {
 });
 function exportBackup() {
   try {
-    const blob = new Blob([JSON.stringify({ app: 'apnoe-trainer', version: 2, history: H, templates: T }, null, 1)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ app: 'apnoe-trainer', version: 3, history: H, templates: T }, null, 1)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = `apnoe-backup-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -509,6 +535,7 @@ function cleanEntry(x) {
   const e = { id: String(x.id || '').slice(0, 40), name: String(x.name || 'Training').slice(0, 40), ts: Number(x.ts),
     inS: n(x.inS, 600), holdS: n(x.holdS, 600), outS: n(x.outS, 600), emptyS: n(x.emptyS, 600), rounds: n(x.rounds, 500) };
   e.planned = Math.max(e.rounds, n(x.planned, 500));
+  if (x.hr && Array.isArray(x.hr.v)) { const hs = hrSummary(x.hr.v.slice(0, 20000).map(a => n(a, 250))); if (hs) e.hr = hs; }
   return e.id && Number.isFinite(e.ts) && cycleOf(e) > 0 ? e : null;
 }
 $('#view-history').addEventListener('change', ev => {
@@ -610,12 +637,16 @@ function openEditor(entry) {
     <label class="field"><span>Date and time</span><input id="e-ts" type="datetime-local" value="${toLocalInput(e.ts)}"></label>
     <div class="grid4">${f}</div>
     <label class="field"><span>Rounds completed</span><input id="e-rounds" type="number" inputmode="numeric" min="0" max="500" value="${e.rounds}"></label>
+    ${e.hr ? `<div class="hrbox" id="e-hrbox"><h4>Heart rate</h4>${hrChart(e)}<p>Avg ${e.hr.avg} · Min ${e.hr.min} · Max ${e.hr.max} bpm. Shaded areas are the breath holds.</p><button type="button" class="linkbtn" id="e-dhr">Remove heart rate data</button></div>` : ''}
     <p class="err" id="e-err" role="alert"></p>
     <div class="btnrow" id="e-btns">
       <button type="button" class="btn" id="e-save">${isNew ? 'Add to history' : 'Save changes'}</button>
       <div class="btnrow two"><button type="button" class="btn ghost" id="e-cancel">Cancel</button>${isNew ? '' : '<button type="button" class="btn ghost" id="e-del">Delete</button>'}</div>
     </div>`, root => {
     $('#e-cancel', root).onclick = closeDialog;
+    let dropHr = false;
+    const dhr = $('#e-dhr', root);
+    if (dhr) dhr.onclick = () => { dropHr = !dropHr; $('#e-hrbox', root).style.opacity = dropHr ? '.45' : ''; dhr.textContent = dropHr ? 'Heart rate data will be removed. Undo' : 'Remove heart rate data'; };
     $('#e-save', root).onclick = () => {
       const v = k => num($('#e-' + k, root), 0, k === 'rounds' ? 500 : 600, 0);
       const next = { id: e.id || ('h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)), name: $('#e-name', root).value.trim() || 'Training',
@@ -624,6 +655,7 @@ function openEditor(entry) {
       if (cycleOf(next) <= 0) { $('#e-err', root).textContent = 'Set at least one phase above 0 seconds.'; return; }
       next.planned = Math.max(next.rounds, entry && entry.planned ? entry.planned : next.rounds);
       if (entry && entry.planned && entry.planned >= next.rounds) next.planned = entry.planned;
+      if (entry && entry.hr && !dropHr) next.hr = entry.hr;
       if (isNew) H.push(next); else H[H.findIndex(h => h.id === e.id)] = next;
       saveHistory(); renderHistory(); closeDialog(); toast(isNew ? 'Added to history' : 'Changes saved');
     };
@@ -676,6 +708,107 @@ async function lockScreen() {
 function unlockScreen() { try { if (wl) wl.release(); } catch (e) { /* ignore */ } wl = null; }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && sess && sess.running && !wl) lockScreen(); });
 
+/* ---------- Heart rate over Bluetooth (standard BLE Heart Rate service) ---------- */
+function hrSummary(v) {
+  const ok = v.filter(x => x > 0);
+  if (ok.length < 5) return null;
+  return { v, avg: Math.round(ok.reduce((a, b) => a + b, 0) / ok.length), min: Math.min(...ok), max: Math.max(...ok) };
+}
+const HR = {
+  supported: !!(navigator.bluetooth && navigator.bluetooth.requestDevice),
+  state: 'off',      // off | connecting | live | lost
+  msg: '', name: '', dev: null, bpm: 0, at: 0, want: false, timer: null, tries: 0,
+  value() { return this.state !== 'off' && performance.now() - this.at < 6000 ? this.bpm : 0; },
+  parse(dv) {   // Bluetooth SIG Heart Rate Measurement characteristic
+    const f = dv.getUint8(0);
+    const bpm = (f & 1) ? dv.getUint16(1, true) : dv.getUint8(1);
+    if (((f >> 1) & 3) === 2) return 0;               // sensor reports no skin contact
+    return bpm >= 20 && bpm <= 250 ? bpm : 0;
+  },
+  set(state, msg) { this.state = state; this.msg = msg || ''; this.ui(); },
+  async connect(all) {
+    if (!this.supported || this.state === 'connecting') return;
+    this.set('connecting');
+    try {
+      const dev = await navigator.bluetooth.requestDevice(all ? { acceptAllDevices: true, optionalServices: ['heart_rate'] } : { filters: [{ services: ['heart_rate'] }] });
+      this.dev = dev; this.name = dev.name || 'Heart rate sensor'; this.want = true;
+      dev.addEventListener('gattserverdisconnected', () => this.dropped());
+      await this.link();
+    } catch (e) {
+      this.want = false;
+      this.set('off', e && e.name === 'NotFoundError' ? '' : 'Could not connect. Is the watch broadcasting its heart rate?');
+    }
+  },
+  async link() {
+    const server = await this.dev.gatt.connect();
+    const svc = await server.getPrimaryService('heart_rate');
+    const ch = await svc.getCharacteristic('heart_rate_measurement');
+    ch.addEventListener('characteristicvaluechanged', ev => { this.bpm = this.parse(ev.target.value); this.at = performance.now(); this.hit(); });
+    await ch.startNotifications();
+    this.tries = 0; this.set('live');
+  },
+  dropped() { if (this.want) { this.set('lost'); this.retry(); } },
+  retry() {
+    clearTimeout(this.timer);
+    if (!this.want) return;
+    this.timer = setTimeout(async () => {
+      try { await this.link(); } catch (e) { if (this.want && ++this.tries < 150) this.retry(); else this.disconnect('Connection to the watch was lost.'); }
+    }, 2000);
+  },
+  disconnect(msg) {
+    this.want = false; clearTimeout(this.timer);
+    try { if (this.dev && this.dev.gatt && this.dev.gatt.connected) this.dev.gatt.disconnect(); } catch (e) { /* already closed */ }
+    this.bpm = 0; this.set('off', msg);
+  },
+  cardHtml() {
+    if (!this.supported) return '<p class="hr-note">This browser can’t connect to Bluetooth devices. Open the app in Chrome on Android to use a heart-rate watch.</p>';
+    if (this.state === 'off') return `<p class="hr-note">On your watch, start “Broadcast heart rate”, then tap Connect.</p>${this.msg ? `<p class="err">${esc(this.msg)}</p>` : ''}
+      <button type="button" class="btn ghost" id="hr-connect">Connect watch</button>
+      <button type="button" class="linkbtn" id="hr-all">Watch not listed? Show all Bluetooth devices</button>`;
+    if (this.state === 'connecting') return '<p class="hr-note">Connecting…</p>';
+    return `<div class="hr-live"><span class="hr-heart">♥</span><b id="hr-bpm">—</b><span>${this.state === 'lost' ? 'reconnecting…' : 'bpm · ' + esc(this.name)}</span></div>
+      <button type="button" class="btn ghost" id="hr-off">Disconnect</button>`;
+  },
+  ui() {
+    const c = $('#hr-card'); if (c) c.innerHTML = this.cardHtml();
+    const sh = $('#s-hr'); if (sh) sh.hidden = this.state === 'off';
+    this.hit();
+  },
+  hit() {
+    const v = this.value();
+    const a = $('#hr-bpm'); if (a) a.textContent = v || '—';
+    const b = $('#s-hr-v'); if (b) b.textContent = v || '—';
+    const n = $('#s-hr-n'); if (n) n.textContent = this.state === 'lost' ? 'reconnecting…' : (v ? 'bpm' : 'no signal');
+  },
+};
+function hrChart(e) {
+  const v = e.hr.v, n = v.length, W = 340, Ht = 150, L = 34, R = 6, T0 = 8, B = 20;
+  const ok = v.filter(x => x > 0);
+  let lo = Math.floor((Math.min(...ok) - 3) / 10) * 10, hi = Math.ceil((Math.max(...ok) + 3) / 10) * 10;
+  if (hi - lo < 20) hi = lo + 20;
+  const X = i => L + (W - L - R) * (n > 1 ? i / (n - 1) : 0), Y = x => T0 + (Ht - T0 - B) * (1 - (x - lo) / (hi - lo));
+  const cy = cycleOf(e); let bands = '';
+  if (cy > 0) for (let r = 0; r * cy < n; r++) {
+    let t = r * cy;
+    for (const p of PHASES) {
+      const d = e[p.field];
+      if ((p.key === 'hold' || p.key === 'empty') && d > 0 && t < n - 1) {
+        const x0 = X(t), x1 = X(Math.min(t + d, n - 1));
+        bands += `<rect x="${x0.toFixed(1)}" y="${T0}" width="${Math.max(0.5, x1 - x0).toFixed(1)}" height="${Ht - T0 - B}" style="fill:var(--p-${p.key});opacity:.2"/>`;
+      }
+      t += d;
+    }
+  }
+  let d = '', pen = false;
+  v.forEach((x, i) => { if (x > 0) { d += (pen ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(x).toFixed(1); pen = true; } else pen = false; });
+  const mid = (lo + hi) / 2;
+  const grid = [lo, mid, hi].map(g => `<line x1="${L}" x2="${W - R}" y1="${Y(g).toFixed(1)}" y2="${Y(g).toFixed(1)}" style="stroke:var(--line)"/><text x="${L - 5}" y="${(Y(g) + 3).toFixed(1)}" text-anchor="end" style="fill:var(--muted);font-size:10px">${Math.round(g)}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Heart rate during the training">${bands}${grid}
+    <path d="${d}" style="fill:none;stroke:var(--hr);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round"/>
+    <text x="${L}" y="${Ht - 5}" style="fill:var(--muted);font-size:10px">0:00</text>
+    <text x="${W - R}" y="${Ht - 5}" text-anchor="end" style="fill:var(--muted);font-size:10px">${fmt(n)}</text></svg>`;
+}
+
 /* ---------- Session ---------- */
 let sess = null;
 const cdEls = [];
@@ -706,7 +839,7 @@ function startSession() {
   const seq = PHASES.map((p, i) => ({ p, i, dur: S[p.field] * 1000 })).filter(x => x.dur > 0);
   const cycleMs = seq.reduce((n, x) => n + x.dur, 0);
   sess = { cfg: Object.assign({}, S), seq, cycleMs, rounds: S.rounds, totalMs: cycleMs * S.rounds, readyMs: S.readyS * 1000,
-    pos: 0, last: performance.now(), running: true, key: null, tickKey: null, startedAt: Date.now(), timer: null, ended: false };
+    pos: 0, last: performance.now(), running: true, key: null, tickKey: null, startedAt: Date.now(), timer: null, ended: false, hr: [], hrUi: 0 };
   $('#s-name').textContent = S.name || 'Training';
   $('#session').classList.add('open');
   $('#s-pause').textContent = 'Pause';
@@ -722,6 +855,7 @@ function tick() {
   if (sess.running) sess.pos += now - sess.last;
   sess.last = now;
   const s = sess;
+  if (now - s.hrUi > 500) { s.hrUi = now; HR.hit(); }
   if (s.pos < s.readyMs) {
     const rem = s.readyMs - s.pos, sec = Math.ceil(rem / 1000);
     setPhaseColor('var(--ink)');
@@ -735,6 +869,7 @@ function tick() {
   const tp = s.pos - s.readyMs;
   if (tp >= s.totalMs) { finishSession(true); return; }
   const round = Math.floor(tp / s.cycleMs);
+  for (let i = s.hr.length; i <= Math.floor(tp / 1000); i++) s.hr.push(HR.value());   // one heart-rate value per training second
   let within = tp - round * s.cycleMs, si = 0;
   while (si < s.seq.length - 1 && within >= s.seq[si].dur) { within -= s.seq[si].dur; si++; }
   const seg = s.seq[si], remMs = seg.dur - within, sec = Math.ceil(remMs / 1000);
@@ -784,6 +919,7 @@ function finishSession(complete) {
   if (!sess || sess.ended) return;
   const s = sess;
   const done = complete ? s.rounds : completedRounds();
+  if (complete) for (let i = s.hr.length; i < Math.round(s.totalMs / 1000); i++) s.hr.push(HR.value());
   s.ended = true; s.running = false; clearInterval(s.timer); unlockScreen();
   if (complete) {
     cue('done'); setPhaseColor('var(--p-in)');
@@ -796,9 +932,11 @@ function finishSession(complete) {
   $('#dlg').dataset.lock = '1';
   const entry = { id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: (s.cfg.name || '').trim() || 'Training', ts: s.startedAt,
     inS: s.cfg.inS, holdS: s.cfg.holdS, outS: s.cfg.outS, emptyS: s.cfg.emptyS, rounds: done, planned: s.rounds };
+  const hs = hrSummary(s.hr); if (hs) entry.hr = hs;
   openDialog(`<h3>${complete ? 'Training complete' : 'Training ended'}</h3>
     <p>${esc(entry.name)} · ${patternHtml(entry)}</p>
     <div class="big-stats"><div><b>${done}/${s.rounds}</b><span>Rounds</span></div><div><b>${fmt(done * s.cycleMs / 1000)}</b><span>Time</span></div></div>
+    ${hs ? `<div class="big-stats"><div><b style="color:var(--hr)">${hs.avg}</b><span>Avg heart rate</span></div><div><b style="color:var(--hr)">${hs.max}</b><span>Max heart rate</span></div></div>` : ''}
     <p style="color:var(--ink);font-weight:600">Save this training to your history?</p>
     <div class="btnrow"><button type="button" class="btn" id="v-save" autofocus>Save to history</button><button type="button" class="btn ghost" id="v-skip">Don’t save</button></div>`, root => {
     $('#v-save', root).onclick = () => { delete $('#dlg').dataset.lock; H.push(entry); saveHistory(); renderHistory(); closeDialog(); closeSession(); showTab('history'); toast('Saved to history'); };
@@ -828,7 +966,7 @@ buildTrain(); bindTrain();
 const savedS = lsGet(LS_S); if (savedS && typeof savedS === 'object') S = Object.assign({}, DEFAULTS, savedS);
 const savedH = lsGet(LS_H); if (Array.isArray(savedH)) H = savedH;
 const savedT = lsGet(LS_T); if (Array.isArray(savedT)) T = savedT.map(cleanTemplate).filter(Boolean);
-syncFields(); renderHistory(); renderTemplates(); setupOffline();
+syncFields(); renderHistory(); renderTemplates(); HR.ui(); setupOffline();
 })();
 </script>
 </body>

@@ -214,9 +214,28 @@ input:focus { border-color: var(--ink); outline: none; }
 .s-hr b { font: 500 34px/1 var(--font-num); color: var(--hr); min-width: 2ch; text-align: right; }
 .s-hr .hr-heart { color: var(--hr); }
 
+/* Max hold */
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--surface2); border-radius: 14px; padding: 4px; margin: 14px 0 4px; }
+.seg button { min-height: 44px; border: 0; border-radius: 10px; background: none; font-weight: 600; color: var(--muted); }
+.seg button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.chartcard { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-top: 10px; display: grid; gap: 6px; }
+.chartcard svg { width: 100%; height: auto; display: block; }
+.chartcard h4 { margin: 0; font: 700 13px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.chartcard p { margin: 0; font-size: 13px; color: var(--muted); }
+.row.one { grid-template-columns: 1fr; }
+.pb { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 8px; background: color-mix(in srgb, var(--p-empty) 22%, transparent); color: var(--p-empty); font: 700 12px var(--font-body); letter-spacing: .04em; vertical-align: middle; }
+.m-big { font: 500 clamp(76px, 25vw, 132px)/1 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.04em; color: var(--phase); }
+.m-bar { width: min(80%, 360px); }
+.m-bar[hidden] { display: none; }
+#mhold .m-bar i { background: var(--phase); }
+.s-btns.m-btns { grid-template-columns: 1fr; }
+.m-btns .btn { min-height: 72px; font-size: 22px; }
+.m-btns .btn.ghost { min-height: 52px; font-size: 17px; }
+.m-btns .btn[hidden] { display: none; }
+
 /* Session */
-#session { position: fixed; inset: 0; z-index: 40; display: none; flex-direction: column; align-items: center; background: color-mix(in srgb, var(--phase) 17%, var(--bg)); transition: background .5s; padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-#session.open { display: flex; }
+#session, #mhold { position: fixed; inset: 0; z-index: 40; display: none; flex-direction: column; align-items: center; background: color-mix(in srgb, var(--phase) 17%, var(--bg)); transition: background .5s; padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+#session.open, #mhold.open { display: flex; }
 .s-top { width: 100%; max-width: 560px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .s-name { font: 700 18px var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .s-round { font: 500 16px var(--font-num); color: var(--muted); white-space: nowrap; }
@@ -253,6 +272,7 @@ input:focus { border-color: var(--ink); outline: none; }
 <div id="app">
   <main>
     <section class="view" id="view-train" aria-labelledby="t-train"></section>
+    <section class="view" id="view-max" aria-labelledby="t-max" hidden></section>
     <section class="view" id="view-history" aria-labelledby="t-history" hidden></section>
     <section class="view" id="view-templates" aria-labelledby="t-templates" hidden></section>
   </main>
@@ -260,6 +280,10 @@ input:focus { border-color: var(--ink); outline: none; }
     <button type="button" data-tab="train" aria-selected="true">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
       Train
+    </button>
+    <button type="button" data-tab="max" aria-selected="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10M7 20h10M8 4v3.5L12 12l-4 4.5V20M16 4v3.5L12 12l4 4.5V20"/></svg>
+      Max hold
     </button>
     <button type="button" data-tab="history" aria-selected="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
@@ -278,7 +302,7 @@ input:focus { border-color: var(--ink); outline: none; }
     <div class="s-phase" id="s-phase" aria-live="polite"></div>
     <div class="s-sub" id="s-sub"></div>
     <div class="cds" id="s-cds" role="group" aria-label="Phase countdowns"></div>
-    <div class="s-hr" id="s-hr" hidden><span class="hr-heart">♥</span><b id="s-hr-v">—</b><span id="s-hr-n">bpm</span></div>
+    <div class="s-hr" data-hrbox hidden><span class="hr-heart">♥</span><b data-hrv>—</b><span data-hrn>bpm</span></div>
     <div class="s-next" id="s-next"></div>
   </div>
   <p class="s-hint" id="s-hint"></p>
@@ -289,6 +313,21 @@ input:focus { border-color: var(--ink); outline: none; }
   <div class="s-btns">
     <button type="button" class="btn" id="s-pause">Pause</button>
     <button type="button" class="btn ghost" id="s-stop">End</button>
+  </div>
+</div>
+
+<div id="mhold" role="dialog" aria-modal="true" aria-label="Maximum breath hold">
+  <div class="s-top"><span class="s-name">Max hold</span><span class="s-round" id="m-tag"></span></div>
+  <div class="s-mid">
+    <div class="s-phase" id="m-phase"></div>
+    <div class="s-sub" id="m-sub"></div>
+    <div class="m-big" id="m-big" role="timer">0:00</div>
+    <div class="bar m-bar" id="m-barwrap"><i id="m-bar"></i></div>
+    <div class="s-hr" data-hrbox hidden><span class="hr-heart">♥</span><b data-hrv>—</b><span data-hrn>bpm</span></div>
+  </div>
+  <div class="s-btns m-btns">
+    <button type="button" class="btn" id="m-main">Start breath hold</button>
+    <button type="button" class="btn ghost" id="m-cancel">Cancel</button>
   </div>
 </div>
 
@@ -309,10 +348,12 @@ const PHASES = [
   { key: 'out',   field: 'outS',   setup: 'Breathe out', name: 'Breathe out', sub: 'Lungs emptying', step: 1 },
   { key: 'empty', field: 'emptyS', setup: 'Hold empty',  name: 'Hold empty',  sub: 'Lungs empty',    step: 5 },
 ];
-const DEFAULTS = { name: '50 Seconds', inS: 5, holdS: 50, outS: 5, emptyS: 10, targetMin: 15, rounds: 13, roundsManual: false, readyS: 5, sound: true, vibrate: true };
+const DEFAULTS = { name: '50 Seconds', inS: 5, holdS: 50, outS: 5, emptyS: 10, targetMin: 15, rounds: 13, roundsManual: false, readyS: 5, sound: true, vibrate: true, relaxS: 120 };
 let S = Object.assign({}, DEFAULTS);
 let H = [];            // history entries
 let T = [];            // templates
+let M = [];            // max breath holds
+let histMode = 'train';
 let touched = false;   // user changed settings this visit
 
 const cycleOf = c => c.inS + c.holdS + c.outS + c.emptyS;
@@ -327,11 +368,12 @@ const num = (el, lo, hi, fb) => { const v = parseInt(el.value, 10); return Numbe
 const patternHtml = e => '<span class="pat">' + PHASES.map(p => `<i style="--c:var(--p-${p.key})">${e[p.field]}</i>`).join('<u>·</u>') + '</span>';
 
 /* ---------- Storage: this phone only (localStorage) ---------- */
-const LS_H = 'apnoe.history.v1', LS_S = 'apnoe.settings.v1', LS_T = 'apnoe.templates.v1';
+const LS_H = 'apnoe.history.v1', LS_S = 'apnoe.settings.v1', LS_T = 'apnoe.templates.v1', LS_M = 'apnoe.maxhold.v1';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } };
 function saveHistory() { lsSet(LS_H, H); }
 function saveTemplates() { lsSet(LS_T, T); }
+function saveMax() { lsSet(LS_M, M); }
 let settingsTimer = null;
 function saveSettings(now) {
   clearTimeout(settingsTimer);
@@ -398,7 +440,7 @@ function buildTrain() {
       <div class="result"><span>Total training time</span><b id="total-len">0:00</b><span class="diff" id="diff-line"></span></div>
     </div>
     <h2>Heart rate</h2>
-    <div class="hrcard" id="hr-card"></div>
+    <div class="hrcard hr-card"></div>
     <h2>Options</h2>
     <div class="opts">
       <div class="ready-row"><label for="f-readyS">Get ready before start (seconds)</label>
@@ -455,9 +497,7 @@ function bindTrain() {
       S.roundsManual = false; touched = true; recompute(true); saveSettings();
     } else if (b.id === 'start') startSession();
     else if (b.id === 'save-tpl') openTemplateEditor(null, S);
-    else if (b.id === 'hr-connect') HR.connect(false);
-    else if (b.id === 'hr-all') HR.connect(true);
-    else if (b.id === 'hr-off') HR.disconnect();
+
   });
   v.addEventListener('input', e => {
     const el = e.target; touched = true;
@@ -493,24 +533,32 @@ function renderHistory() {
       <button type="button" class="row-again" data-act="again" data-id="${esc(e.id)}" aria-label="Train again with ${esc(e.name)}">Train<br>again</button>
     </li>`;
   }).join('');
-  $('#view-history').innerHTML = `
-    <div class="hhead"><div><h1 id="t-history">History</h1><p class="sub" style="margin:0">Your saved trainings.</p></div>
-      <button type="button" class="btn small" data-act="add">Add</button></div>
+  const trainHtml = `
     <div class="stats">
       <div class="stat"><b>${items.length}</b><span>Trainings</span></div>
       <div class="stat"><b>${totalRounds}</b><span>Rounds</span></div>
       <div class="stat"><b>${fmt(totalSec)}</b><span>Total time</span></div>
     </div>
-    ${items.length ? `<ul class="list">${rows}</ul>` : '<div class="empty">No trainings saved yet.<br>Finish a training and choose Save, or tap Add to enter one by hand.</div>'}
+    ${items.length ? `<ul class="list">${rows}</ul>` : '<div class="empty">No trainings saved yet.<br>Finish a training and choose Save, or tap Add to enter one by hand.</div>'}`;
+  $('#view-history').innerHTML = `
+    <div class="hhead"><div><h1 id="t-history">History</h1></div>
+      <button type="button" class="btn small" data-act="add">Add</button></div>
+    <div class="seg" role="group" aria-label="History type">
+      <button type="button" data-act="mode" data-mode="train" aria-selected="${histMode === 'train'}">Training</button>
+      <button type="button" data-act="mode" data-mode="max" aria-selected="${histMode === 'max'}">Max hold</button>
+    </div>
+    ${histMode === 'max' ? maxHistoryHtml() : trainHtml}
     <h2>Backup</h2>
-    <p class="sub" style="margin:0 0 10px">Your history and templates are stored on this phone only. Save a copy now and then, for example before clearing browser data.</p>
+    <p class="sub" style="margin:0 0 10px">Your history, templates and max holds are stored on this phone only. Save a copy now and then, for example before clearing browser data.</p>
     <div class="btnrow two"><button type="button" class="btn ghost small" data-act="export">Save backup</button><button type="button" class="btn ghost small" data-act="import">Restore backup</button></div>
     <input type="file" id="imp" accept="application/json,.json" hidden>`;
 }
 $('#view-history').addEventListener('click', e => {
   const b = e.target.closest('button[data-act]'); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id;
-  if (act === 'add') openEditor(null);
+  if (act === 'mode') { histMode = b.dataset.mode; renderHistory(); }
+  else if (act === 'add') (histMode === 'max' ? openMaxEditor(null) : openEditor(null));
+  else if (act === 'edit-max') openMaxEditor(M.find(x => x.id === id));
   else if (act === 'export') exportBackup();
   else if (act === 'import') $('#imp').click();
   else if (act === 'edit') openEditor(H.find(x => x.id === id));
@@ -522,12 +570,20 @@ $('#view-history').addEventListener('click', e => {
 });
 function exportBackup() {
   try {
-    const blob = new Blob([JSON.stringify({ app: 'apnoe-trainer', version: 3, history: H, templates: T }, null, 1)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ app: 'apnoe-trainer', version: 4, history: H, templates: T, maxhold: M }, null, 1)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = `apnoe-backup-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     toast('Backup saved to your downloads');
   } catch (e) { toast('Could not create the backup'); }
+}
+function cleanMax(x) {
+  if (!x || typeof x !== 'object') return null;
+  const n = (v, hi) => clamp(Math.round(Number(v)) || 0, 0, hi);
+  const e = { id: String(x.id || '').slice(0, 40), ts: Number(x.ts), holdS: n(x.holdS, 7200), relaxS: n(x.relaxS, 7200) };
+  if (x.hr && Array.isArray(x.hr.v)) { const hs = hrSummary(x.hr.v.slice(0, 20000).map(a => n(a, 250))); if (hs) e.hr = hs; }
+  if (Number(x.restHr) > 0) e.restHr = n(x.restHr, 250);
+  return e.id && Number.isFinite(e.ts) && e.holdS > 0 ? e : null;
 }
 function cleanEntry(x) {
   if (!x || typeof x !== 'object') return null;
@@ -551,9 +607,13 @@ $('#view-history').addEventListener('change', ev => {
       const haveT = new Set(T.map(t => t.id));
       const freshT = (Array.isArray(data.templates) ? data.templates : []).map(cleanTemplate).filter(t => t && !haveT.has(t.id));
       T = T.concat(freshT); saveTemplates(); renderTemplates();
+      const haveM = new Set(M.map(m => m.id));
+      const freshM = (Array.isArray(data.maxhold) ? data.maxhold : []).map(cleanMax).filter(m => m && !haveM.has(m.id));
+      M = M.concat(freshM); saveMax(); renderHistory();
       const parts = [];
       if (fresh.length) parts.push(`${fresh.length} training${fresh.length === 1 ? '' : 's'}`);
       if (freshT.length) parts.push(`${freshT.length} template${freshT.length === 1 ? '' : 's'}`);
+      if (freshM.length) parts.push(`${freshM.length} max hold${freshM.length === 1 ? '' : 's'}`);
       toast(parts.length ? `Restored ${parts.join(' and ')}` : 'Nothing new to restore');
     } catch (e) { toast('That file is not a valid backup'); }
   };
@@ -669,9 +729,89 @@ function openEditor(entry) {
   });
 }
 
+/* ---------- Max hold: history, chart, editor ---------- */
+const mhWhen = ts => new Date(ts).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+function maxChart(items) {      // items sorted oldest to newest
+  const pts = items.slice(-100), n = pts.length;
+  const best = Math.max(...pts.map(e => e.holdS));
+  const step = best > 360 ? 120 : best > 150 ? 60 : best > 60 ? 30 : 15;
+  const top = Math.max(step * 2, Math.ceil(best * 1.12 / step) * step);
+  const W = 340, Ht = 170, L = 40, R = 12, T0 = 14, B = 24;
+  const X = i => L + (W - L - R) * (n > 1 ? i / (n - 1) : 0.5), Y = v => T0 + (Ht - T0 - B) * (1 - v / top);
+  let grid = '';
+  for (let g = 0; g <= top; g += step) grid += `<line x1="${L}" x2="${W - R}" y1="${Y(g).toFixed(1)}" y2="${Y(g).toFixed(1)}" style="stroke:var(--line)"/><text x="${L - 6}" y="${(Y(g) + 3).toFixed(1)}" text-anchor="end" style="fill:var(--muted);font-size:10px">${fmt(g)}</text>`;
+  const path = pts.map((e, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(e.holdS).toFixed(1)).join('');
+  const bi = pts.findIndex(e => e.holdS === best);
+  const dots = pts.map((e, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(e.holdS).toFixed(1)}" r="${i === bi ? 5 : 3.2}" style="fill:${i === bi ? 'var(--p-empty)' : 'var(--p-hold)'}"/>`).join('');
+  const lx = Math.min(Math.max(X(bi), L + 24), W - R - 24);
+  const d0 = new Date(pts[0].ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), d1 = new Date(pts[n - 1].ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Max hold times over time">${grid}
+    <path d="${path}" style="fill:none;stroke:var(--p-hold);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round"/>${dots}
+    <text x="${lx.toFixed(1)}" y="${(Y(best) - 9).toFixed(1)}" text-anchor="middle" style="fill:var(--p-empty);font-size:11px;font-weight:700">${fmt(best)}</text>
+    <text x="${L}" y="${Ht - 6}" style="fill:var(--muted);font-size:10px">${esc(d0)}</text>
+    <text x="${W - R}" y="${Ht - 6}" text-anchor="end" style="fill:var(--muted);font-size:10px">${n > 1 ? esc(d1) : ''}</text></svg>`;
+}
+function maxHistoryHtml() {
+  const items = M.slice().sort((a, b) => b.ts - a.ts);
+  const best = items.reduce((m, e) => Math.max(m, e.holdS), 0);
+  const rows = items.map(e => `<li class="row one">
+      <button type="button" class="row-main" data-act="edit-max" data-id="${esc(e.id)}" aria-label="Edit max hold from ${esc(mhWhen(e.ts))}">
+        <span class="row-name">${fmt(e.holdS)}${e.holdS === best ? '<span class="pb">BEST</span>' : ''}</span>
+        <span class="row-date">${esc(mhWhen(e.ts))}</span>
+        <span class="row-meta">${e.relaxS ? `<span>Relaxed ${fmt(e.relaxS)}</span>` : ''}${e.restHr ? `<span class="hrmeta">♥ rest ${e.restHr}</span>` : ''}${e.hr ? `<span class="hrmeta">♥ peak ${e.hr.max}</span>` : ''}</span>
+      </button></li>`).join('');
+  return `
+    <div class="stats">
+      <div class="stat"><b>${items.length}</b><span>Holds</span></div>
+      <div class="stat"><b>${items.length ? fmt(best) : '–'}</b><span>Best</span></div>
+      <div class="stat"><b>${items.length ? fmt(items[0].holdS) : '–'}</b><span>Latest</span></div>
+    </div>
+    ${items.length ? `<div class="chartcard"><h4>Hold time per attempt</h4>${maxChart(items.slice().reverse())}<p>Oldest to newest. The orange dot is your best.</p></div><ul class="list">${rows}</ul>` : '<div class="empty">No max holds saved yet.<br>Use the Max hold tab, or tap Add to enter one by hand.</div>'}`;
+}
+function openMaxEditor(entry) {
+  const isNew = !entry;
+  const e = entry || { id: '', ts: Date.now(), holdS: 0, relaxS: 0 };
+  openDialog(`
+    <h3>${isNew ? 'Add max hold' : 'Edit max hold'}</h3>
+    <label class="field"><span>Date and time</span><input id="e-ts" type="datetime-local" value="${toLocalInput(e.ts)}"></label>
+    <div class="grid4">
+      <label class="field"><span>Hold time (minutes)</span><input id="e-hm" type="number" inputmode="numeric" min="0" max="120" value="${Math.floor(e.holdS / 60)}"></label>
+      <label class="field"><span>Hold time (seconds)</span><input id="e-hs" type="number" inputmode="numeric" min="0" max="59" value="${e.holdS % 60}"></label>
+    </div>
+    <label class="field"><span>Relaxation before the hold (seconds, optional)</span><input id="e-relax" type="number" inputmode="numeric" min="0" max="7200" value="${e.relaxS || 0}"></label>
+    ${e.hr ? `<div class="hrbox" id="e-hrbox"><h4>Heart rate</h4>${hrChart(e)}<p>Avg ${e.hr.avg} · Min ${e.hr.min} · Max ${e.hr.max} bpm${e.restHr ? ` · Resting before: ${e.restHr}` : ''}.</p><button type="button" class="linkbtn" id="e-dhr">Remove heart rate data</button></div>` : ''}
+    <p class="err" id="e-err" role="alert"></p>
+    <div class="btnrow" id="e-btns">
+      <button type="button" class="btn" id="e-save">${isNew ? 'Add to history' : 'Save changes'}</button>
+      <div class="btnrow two"><button type="button" class="btn ghost" id="e-cancel">Cancel</button>${isNew ? '' : '<button type="button" class="btn ghost" id="e-del">Delete</button>'}</div>
+    </div>`, root => {
+    $('#e-cancel', root).onclick = closeDialog;
+    let dropHr = false;
+    const dhr = $('#e-dhr', root);
+    if (dhr) dhr.onclick = () => { dropHr = !dropHr; $('#e-hrbox', root).style.opacity = dropHr ? '.45' : ''; dhr.textContent = dropHr ? 'Heart rate data will be removed. Undo' : 'Remove heart rate data'; };
+    $('#e-save', root).onclick = () => {
+      const holdS = num($('#e-hm', root), 0, 120, 0) * 60 + num($('#e-hs', root), 0, 59, 0);
+      const ts = new Date($('#e-ts', root).value).getTime();
+      if (!Number.isFinite(ts)) { $('#e-err', root).textContent = 'Enter a valid date and time.'; return; }
+      if (holdS < 1) { $('#e-err', root).textContent = 'Enter a hold time above 0.'; return; }
+      const next = { id: e.id || ('m' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)), ts, holdS, relaxS: num($('#e-relax', root), 0, 7200, 0) };
+      if (entry && entry.hr && !dropHr) { next.hr = entry.hr; if (entry.restHr) next.restHr = entry.restHr; }
+      if (isNew) M.push(next); else M[M.findIndex(m => m.id === e.id)] = next;
+      saveMax(); renderHistory(); closeDialog(); toast(isNew ? 'Added to history' : 'Changes saved');
+    };
+    const del = $('#e-del', root);
+    if (del) del.onclick = () => {
+      $('#e-btns', root).innerHTML = `<p style="color:var(--ink);font-weight:600">Delete this max hold (${fmt(e.holdS)}) from your history?</p>
+        <div class="btnrow two"><button type="button" class="btn ghost" id="e-no">Keep it</button><button type="button" class="btn danger" id="e-yes">Delete</button></div>`;
+      $('#e-no', root).onclick = closeDialog;
+      $('#e-yes', root).onclick = () => { M = M.filter(m => m.id !== e.id); saveMax(); renderHistory(); closeDialog(); toast('Deleted'); };
+    };
+  });
+}
+
 /* ---------- Tabs ---------- */
 function showTab(t) {
-  for (const v of ['train', 'history', 'templates']) $('#view-' + v).hidden = v !== t;
+  for (const v of ['train', 'max', 'history', 'templates']) $('#view-' + v).hidden = v !== t;
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
   $('main').scrollTop = 0;
 }
@@ -706,7 +846,7 @@ async function lockScreen() {
   $('#s-hint').textContent = wlFailed ? 'This view cannot keep the screen on. Raise your phone’s screen timeout while training.' : '';
 }
 function unlockScreen() { try { if (wl) wl.release(); } catch (e) { /* ignore */ } wl = null; }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && sess && sess.running && !wl) lockScreen(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && ((sess && sess.running) || mh) && !wl) lockScreen(); });
 
 /* ---------- Heart rate over Bluetooth (standard BLE Heart Rate service) ---------- */
 function hrSummary(v) {
@@ -763,24 +903,28 @@ const HR = {
   cardHtml() {
     if (!this.supported) return '<p class="hr-note">This browser can’t connect to Bluetooth devices. Open the app in Chrome on Android to use a heart-rate watch.</p>';
     if (this.state === 'off') return `<p class="hr-note">On your watch, start “Broadcast heart rate”, then tap Connect.</p>${this.msg ? `<p class="err">${esc(this.msg)}</p>` : ''}
-      <button type="button" class="btn ghost" id="hr-connect">Connect watch</button>
-      <button type="button" class="linkbtn" id="hr-all">Watch not listed? Show all Bluetooth devices</button>`;
+      <button type="button" class="btn ghost" data-hr="connect">Connect watch</button>
+      <button type="button" class="linkbtn" data-hr="all">Watch not listed? Show all Bluetooth devices</button>`;
     if (this.state === 'connecting') return '<p class="hr-note">Connecting…</p>';
-    return `<div class="hr-live"><span class="hr-heart">♥</span><b id="hr-bpm">—</b><span>${this.state === 'lost' ? 'reconnecting…' : 'bpm · ' + esc(this.name)}</span></div>
-      <button type="button" class="btn ghost" id="hr-off">Disconnect</button>`;
+    return `<div class="hr-live"><span class="hr-heart">♥</span><b data-hrv>—</b><span>${this.state === 'lost' ? 'reconnecting…' : 'bpm · ' + esc(this.name)}</span></div>
+      <button type="button" class="btn ghost" data-hr="off">Disconnect</button>`;
   },
   ui() {
-    const c = $('#hr-card'); if (c) c.innerHTML = this.cardHtml();
-    const sh = $('#s-hr'); if (sh) sh.hidden = this.state === 'off';
+    document.querySelectorAll('.hr-card').forEach(c => { c.innerHTML = this.cardHtml(); });
+    document.querySelectorAll('[data-hrbox]').forEach(x => { x.hidden = this.state === 'off'; });
     this.hit();
   },
   hit() {
     const v = this.value();
-    const a = $('#hr-bpm'); if (a) a.textContent = v || '—';
-    const b = $('#s-hr-v'); if (b) b.textContent = v || '—';
-    const n = $('#s-hr-n'); if (n) n.textContent = this.state === 'lost' ? 'reconnecting…' : (v ? 'bpm' : 'no signal');
+    document.querySelectorAll('[data-hrv]').forEach(x => { x.textContent = v || '—'; });
+    const unit = this.state === 'lost' ? 'reconnecting…' : (v ? 'bpm' : 'no signal');
+    document.querySelectorAll('[data-hrn]').forEach(x => { x.textContent = unit; });
   },
 };
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-hr]'); if (!b) return;
+  if (b.dataset.hr === 'connect') HR.connect(false); else if (b.dataset.hr === 'all') HR.connect(true); else if (b.dataset.hr === 'off') HR.disconnect();
+});
 function hrChart(e) {
   const v = e.hr.v, n = v.length, W = 340, Ht = 150, L = 34, R = 6, T0 = 8, B = 20;
   const ok = v.filter(x => x > 0);
@@ -875,7 +1019,7 @@ function tick() {
   const seg = s.seq[si], remMs = seg.dur - within, sec = Math.ceil(remMs / 1000);
   const key = round * 10 + si;
   if (key !== s.key) { s.key = key; cue(seg.p.key); }
-  if ((seg.p.key === 'hold' || seg.p.key === 'empty') && sec <= 3 && remMs > 0 && s.tickKey !== key + ':' + sec) { s.tickKey = key + ':' + sec; if (!(seg.dur <= 3000 && within < 300)) beep(1000, .07, 0, .2); }
+  if (sec <= 3 && remMs > 0 && s.tickKey !== key + ':' + sec) { s.tickKey = key + ':' + sec; if (!(seg.dur <= 3000 && within < 300)) beep(1000, .07, 0, .2); }
   setPhaseColor(`var(--p-${seg.p.key})`);
   $('#s-phase').textContent = seg.p.name;
   $('#s-sub').textContent = s.running ? seg.p.sub : 'Paused';
@@ -944,6 +1088,123 @@ function finishSession(complete) {
   });
 }
 
+/* ---------- Max hold: setup view and session ---------- */
+function buildMax() {
+  $('#view-max').innerHTML = `
+    <h1 id="t-max">Max hold</h1>
+    <p class="sub">Relax first, then hold your breath as long as you can.</p>
+    <h2>Relaxation</h2>
+    <div class="plan">
+      <div class="plan-row">
+        <label for="f-relaxS">Relaxation countdown<small>seconds. Set 0 to start the hold yourself with a button.</small></label>
+        <div class="stepper">
+          <button type="button" data-for="f-relaxS" data-delta="-15" aria-label="Shorter relaxation">−</button>
+          <input id="f-relaxS" type="number" inputmode="numeric" min="0" max="1800">
+          <button type="button" data-for="f-relaxS" data-delta="15" aria-label="Longer relaxation">+</button>
+        </div>
+      </div>
+      <div class="result"><span>Relaxation</span><b id="relax-len">2:00</b></div>
+    </div>
+    <h2>Heart rate</h2>
+    <div class="hrcard hr-card"></div>
+    <div class="startwrap"><button type="button" class="btn" id="m-start">Start relaxation</button></div>`;
+  const v = $('#view-max');
+  v.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.for) {
+      const el = $('#' + b.dataset.for);
+      el.value = clamp((parseInt(el.value, 10) || 0) + parseInt(b.dataset.delta, 10), +el.min, +el.max);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    } else if (b.id === 'm-start') startMax();
+  });
+  v.addEventListener('input', e => {
+    if (e.target.id !== 'f-relaxS') return;
+    S.relaxS = num(e.target, 0, 1800, 0); touched = true; syncMax(); saveSettings();
+  });
+  v.addEventListener('change', e => { if (e.target.id === 'f-relaxS') e.target.value = S.relaxS; });
+}
+function syncMax() {
+  const el = $('#f-relaxS'); if (el && document.activeElement !== el) el.value = S.relaxS;
+  $('#relax-len').textContent = S.relaxS > 0 ? fmt(S.relaxS) : 'No countdown';
+  $('#m-start').textContent = S.relaxS > 0 ? 'Start relaxation' : 'Start (you press the hold button)';
+}
+let mh = null;
+function startMax() {
+  saveSettings(true);
+  try { const AC = window.AudioContext || window.webkitAudioContext; if (!actx && AC) actx = new AC(); if (actx && actx.state === 'suspended') actx.resume(); } catch (e) { actx = null; }
+  mh = { phase: 'relax', relaxMs: S.relaxS * 1000, t0: performance.now(), holdStart: 0, holdAt: 0, hrRelax: [], hrHold: [], tickKey: null, uiAt: 0, timer: null };
+  $('#mhold').classList.add('open');
+  lockScreen(); mSetUi();
+  mh.timer = setInterval(mTick, 100); mTick();
+}
+function mSetUi() {
+  const m = mh, hold = m.phase === 'hold';
+  $('#mhold').style.setProperty('--phase', hold ? 'var(--p-hold)' : 'var(--p-in)');
+  $('#m-phase').textContent = hold ? 'Hold' : 'Relax';
+  $('#m-tag').textContent = hold ? 'Holding' : (m.relaxMs > 0 ? 'Countdown' : 'Your pace');
+  $('#m-sub').textContent = hold ? 'As long as you can. Tap End hold when you breathe.' : (m.relaxMs > 0 ? 'Breathe calmly. The hold starts when the countdown ends.' : 'Breathe calmly. Tap the button when you are ready.');
+  $('#m-main').textContent = hold ? 'End hold' : (m.relaxMs > 0 ? 'Start hold now' : 'Start breath hold');
+  $('#m-cancel').hidden = hold;
+  $('#m-barwrap').hidden = hold || m.relaxMs <= 0;
+}
+function mTick() {
+  const m = mh; if (!m) return;
+  const now = performance.now();
+  if (m.phase === 'relax') {
+    const el = now - m.t0;
+    for (let i = m.hrRelax.length; i <= Math.floor(el / 1000); i++) m.hrRelax.push(HR.value());
+    if (m.relaxMs > 0) {
+      const rem = m.relaxMs - el;
+      if (rem <= 0) { mStartHold(); return; }
+      const sec = Math.ceil(rem / 1000);
+      $('#m-big').textContent = fmt(sec); $('#m-bar').style.width = (el / m.relaxMs * 100).toFixed(1) + '%';
+      if (sec <= 3 && m.tickKey !== 'r' + sec) { m.tickKey = 'r' + sec; beep(1000, .07, 0, .2); }
+    } else $('#m-big').textContent = fmt(Math.floor(el / 1000));
+  } else {
+    const hn = now - m.holdStart;
+    for (let i = m.hrHold.length; i <= Math.floor(hn / 1000); i++) m.hrHold.push(HR.value());
+    $('#m-big').textContent = fmt(Math.floor(hn / 1000));
+  }
+  if (now - m.uiAt > 500) { m.uiAt = now; HR.hit(); }
+}
+function mStartHold() {
+  const m = mh; if (!m || m.phase === 'hold') return;
+  m.phase = 'hold'; m.holdStart = performance.now(); m.holdAt = Date.now();
+  cue('hold'); mSetUi(); $('#m-big').textContent = '0:00';
+}
+function closeMax() {
+  if (mh) clearInterval(mh.timer);
+  mh = null; unlockScreen(); $('#mhold').classList.remove('open');
+}
+function mEndHold() {
+  const m = mh; if (!m || m.phase !== 'hold') return;
+  const ms = performance.now() - m.holdStart;
+  clearInterval(m.timer); unlockScreen();
+  const holdS = Math.round(ms / 1000);
+  const entry = { id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: m.holdAt, holdS, relaxS: Math.round((m.holdStart - m.t0) / 1000) };
+  const hs = hrSummary(m.hrHold); if (hs) entry.hr = hs;
+  const rest = m.hrRelax.slice(-20).filter(x => x > 0);
+  if (rest.length >= 3) entry.restHr = Math.round(rest.reduce((a, b) => a + b, 0) / rest.length);
+  if (holdS < 1) { closeMax(); toast('Hold too short, nothing to save'); return; }
+  beep(523, .2); vibrate(150);
+  const prevBest = M.reduce((a, x) => Math.max(a, x.holdS), 0);
+  const tiles = [];
+  if (entry.restHr) tiles.push(['Resting', entry.restHr]);
+  if (hs) { tiles.push(['Average', hs.avg]); tiles.push(['Peak', hs.max]); }
+  $('#dlg').dataset.lock = '1';
+  openDialog(`<h3>Hold finished</h3>
+    <div class="big-stats"><div><b>${fmt(holdS)}</b><span>Hold time</span></div></div>
+    ${M.length && holdS > prevBest ? '<p style="color:var(--p-empty);font-weight:700">New personal best!</p>' : ''}
+    ${tiles.length ? `<div class="big-stats">${tiles.map(t => `<div><b style="color:var(--hr)">${t[1]}</b><span>${t[0]} heart rate</span></div>`).join('')}</div>` : ''}
+    <p style="color:var(--ink);font-weight:600">Save this max hold to your history?</p>
+    <div class="btnrow"><button type="button" class="btn" id="v-save" autofocus>Save to history</button><button type="button" class="btn ghost" id="v-skip">Don’t save</button></div>`, root => {
+    $('#v-save', root).onclick = () => { delete $('#dlg').dataset.lock; M.push(entry); saveMax(); histMode = 'max'; renderHistory(); closeDialog(); closeMax(); showTab('history'); toast('Saved to history'); };
+    $('#v-skip', root).onclick = () => { delete $('#dlg').dataset.lock; closeDialog(); closeMax(); showTab('max'); };
+  });
+}
+$('#m-main').addEventListener('click', () => { if (!mh) return; if (mh.phase === 'hold') mEndHold(); else mStartHold(); });
+$('#m-cancel').addEventListener('click', closeMax);
+
 /* ---------- Offline support and updates ---------- */
 function setupOffline() {
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* optional */ }
@@ -962,11 +1223,12 @@ function setupOffline() {
 }
 
 /* ---------- Boot ---------- */
-buildTrain(); bindTrain();
+buildTrain(); bindTrain(); buildMax();
 const savedS = lsGet(LS_S); if (savedS && typeof savedS === 'object') S = Object.assign({}, DEFAULTS, savedS);
 const savedH = lsGet(LS_H); if (Array.isArray(savedH)) H = savedH;
+const savedM = lsGet(LS_M); if (Array.isArray(savedM)) M = savedM.map(cleanMax).filter(Boolean);
 const savedT = lsGet(LS_T); if (Array.isArray(savedT)) T = savedT.map(cleanTemplate).filter(Boolean);
-syncFields(); renderHistory(); renderTemplates(); HR.ui(); setupOffline();
+syncFields(); syncMax(); renderHistory(); renderTemplates(); HR.ui(); setupOffline();
 })();
 </script>
 </body>

@@ -1,5 +1,5 @@
 // Bump VERSION on every release so phones fetch the new files.
-const VERSION = '4';
+const VERSION = '5';
 const CACHE = 'apnoe-' + VERSION;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest',

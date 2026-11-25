@@ -220,6 +220,8 @@ input:focus { border-color: var(--ink); outline: none; }
 .seg button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
 .chartcard { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-top: 10px; display: grid; gap: 6px; }
 .chartcard svg { width: 100%; height: auto; display: block; }
+.chartcard .seg { margin: 4px 0 2px; padding: 3px; border-radius: 12px; }
+.chartcard .seg button { min-height: 36px; font-size: 14px; border-radius: 9px; }
 .chartcard h4 { margin: 0; font: 700 13px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .chartcard p { margin: 0; font-size: 13px; color: var(--muted); }
 .row.one { grid-template-columns: 1fr; }
@@ -354,6 +356,8 @@ let H = [];            // history entries
 let T = [];            // templates
 let M = [];            // max breath holds
 let histMode = 'train';
+let chartMode = 'attempt';   // 'attempt' = evenly spaced, 'date' = scaled by real date
+try { if (localStorage.getItem('apnoe.chartmode.v1') === 'date') chartMode = 'date'; } catch (e) {}
 let touched = false;   // user changed settings this visit
 
 const cycleOf = c => c.inS + c.holdS + c.outS + c.emptyS;
@@ -557,6 +561,7 @@ $('#view-history').addEventListener('click', e => {
   const b = e.target.closest('button[data-act]'); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id;
   if (act === 'mode') { histMode = b.dataset.mode; renderHistory(); }
+  else if (act === 'chart') { chartMode = b.dataset.cm === 'date' ? 'date' : 'attempt'; try { localStorage.setItem('apnoe.chartmode.v1', chartMode); } catch (e) {} renderHistory(); }
   else if (act === 'add') (histMode === 'max' ? openMaxEditor(null) : openEditor(null));
   else if (act === 'edit-max') openMaxEditor(M.find(x => x.id === id));
   else if (act === 'export') exportBackup();
@@ -731,25 +736,45 @@ function openEditor(entry) {
 
 /* ---------- Max hold: history, chart, editor ---------- */
 const mhWhen = ts => new Date(ts).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-function maxChart(items) {      // items sorted oldest to newest
-  const pts = items.slice(-100), n = pts.length;
+function maxChart(items, mode) {      // items sorted oldest to newest; mode 'attempt' (even spacing) or 'date' (real time axis)
+  const pts = items.slice(-100), n = pts.length, byDate = mode === 'date';
   const best = Math.max(...pts.map(e => e.holdS));
   const step = best > 360 ? 120 : best > 150 ? 60 : best > 60 ? 30 : 15;
   const top = Math.max(step * 2, Math.ceil(best * 1.12 / step) * step);
   const W = 340, Ht = 170, L = 40, R = 12, T0 = 14, B = 24;
-  const X = i => L + (W - L - R) * (n > 1 ? i / (n - 1) : 0.5), Y = v => T0 + (Ht - T0 - B) * (1 - v / top);
+  const Y = v => T0 + (Ht - T0 - B) * (1 - v / top);
+  let X, axis = '';
+  if (byDate) {
+    // calendar axis: from the 1st of the first month to the 1st after the last month
+    const f = new Date(pts[0].ts), l = new Date(pts[n - 1].ts);
+    const t0 = new Date(f.getFullYear(), f.getMonth(), 1).getTime(), t1 = new Date(l.getFullYear(), l.getMonth() + 1, 1).getTime();
+    X = (e, i) => L + (W - L - R) * (e.ts - t0) / (t1 - t0);
+    const months = []; for (let d = new Date(t0); d.getTime() < t1; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(d);
+    const cell = (W - L - R) / months.length, long = months.length > 14, every = Math.max(1, Math.ceil(34 / cell));
+    months.forEach((m, i) => {
+      const x0 = L + (W - L - R) * (m.getTime() - t0) / (t1 - t0), x1 = L + (W - L - R) * (new Date(m.getFullYear(), m.getMonth() + 1, 1).getTime() - t0) / (t1 - t0);
+      if (long) {      // long history: year markers only, so labels stay readable
+        if (m.getMonth() === 0) axis += `<line x1="${x0.toFixed(1)}" x2="${x0.toFixed(1)}" y1="${T0}" y2="${Ht - B}" style="stroke:var(--line);opacity:.45"/><text x="${(x0 + 3).toFixed(1)}" y="${Ht - 6}" style="fill:var(--muted);font-size:10px">${m.getFullYear()}</text>`;
+        else if (i === 0) axis += `<text x="${L}" y="${Ht - 6}" style="fill:var(--muted);font-size:10px">${m.getFullYear()}</text>`;
+        return;
+      }
+      axis += `<line x1="${x0.toFixed(1)}" x2="${x0.toFixed(1)}" y1="${T0}" y2="${Ht - B}" style="stroke:var(--line);opacity:.45"/>`;
+      if (i % every === 0) axis += `<text x="${((x0 + x1) / 2).toFixed(1)}" y="${Ht - 6}" text-anchor="middle" style="fill:var(--muted);font-size:10px">${esc(m.toLocaleDateString(undefined, { month: 'short' }).replace('.', ''))}${m.getMonth() === 0 && i ? ' ' + String(m.getFullYear()).slice(2) : ''}</text>`;
+    });
+  } else {
+    X = (e, i) => L + (W - L - R) * (n > 1 ? i / (n - 1) : 0.5);
+    const d0 = new Date(pts[0].ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), d1 = new Date(pts[n - 1].ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    axis = `<text x="${L}" y="${Ht - 6}" style="fill:var(--muted);font-size:10px">${esc(d0)}</text><text x="${W - R}" y="${Ht - 6}" text-anchor="end" style="fill:var(--muted);font-size:10px">${n > 1 ? esc(d1) : ''}</text>`;
+  }
   let grid = '';
   for (let g = 0; g <= top; g += step) grid += `<line x1="${L}" x2="${W - R}" y1="${Y(g).toFixed(1)}" y2="${Y(g).toFixed(1)}" style="stroke:var(--line)"/><text x="${L - 6}" y="${(Y(g) + 3).toFixed(1)}" text-anchor="end" style="fill:var(--muted);font-size:10px">${fmt(g)}</text>`;
-  const path = pts.map((e, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(e.holdS).toFixed(1)).join('');
+  const path = pts.map((e, i) => (i ? 'L' : 'M') + X(e, i).toFixed(1) + ' ' + Y(e.holdS).toFixed(1)).join('');
   const bi = pts.findIndex(e => e.holdS === best);
-  const dots = pts.map((e, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(e.holdS).toFixed(1)}" r="${i === bi ? 5 : 3.2}" style="fill:${i === bi ? 'var(--p-empty)' : 'var(--p-hold)'}"/>`).join('');
-  const lx = Math.min(Math.max(X(bi), L + 24), W - R - 24);
-  const d0 = new Date(pts[0].ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), d1 = new Date(pts[n - 1].ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  return `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Max hold times over time">${grid}
+  const dots = pts.map((e, i) => `<circle cx="${X(e, i).toFixed(1)}" cy="${Y(e.holdS).toFixed(1)}" r="${i === bi ? 5 : 3.2}" style="fill:${i === bi ? 'var(--p-empty)' : 'var(--p-hold)'}"/>`).join('');
+  const lx = Math.min(Math.max(X(pts[bi], bi), L + 24), W - R - 24);
+  return `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Max hold times ${byDate ? 'by date' : 'per attempt'}">${grid}${byDate ? axis : ''}
     <path d="${path}" style="fill:none;stroke:var(--p-hold);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round"/>${dots}
-    <text x="${lx.toFixed(1)}" y="${(Y(best) - 9).toFixed(1)}" text-anchor="middle" style="fill:var(--p-empty);font-size:11px;font-weight:700">${fmt(best)}</text>
-    <text x="${L}" y="${Ht - 6}" style="fill:var(--muted);font-size:10px">${esc(d0)}</text>
-    <text x="${W - R}" y="${Ht - 6}" text-anchor="end" style="fill:var(--muted);font-size:10px">${n > 1 ? esc(d1) : ''}</text></svg>`;
+    <text x="${lx.toFixed(1)}" y="${(Y(best) - 9).toFixed(1)}" text-anchor="middle" style="fill:var(--p-empty);font-size:11px;font-weight:700">${fmt(best)}</text>${byDate ? '' : axis}</svg>`;
 }
 function maxHistoryHtml() {
   const items = M.slice().sort((a, b) => b.ts - a.ts);
@@ -766,7 +791,11 @@ function maxHistoryHtml() {
       <div class="stat"><b>${items.length ? fmt(best) : '–'}</b><span>Best</span></div>
       <div class="stat"><b>${items.length ? fmt(items[0].holdS) : '–'}</b><span>Latest</span></div>
     </div>
-    ${items.length ? `<div class="chartcard"><h4>Hold time per attempt</h4>${maxChart(items.slice().reverse())}<p>Oldest to newest. The orange dot is your best.</p></div><ul class="list">${rows}</ul>` : '<div class="empty">No max holds saved yet.<br>Use the Max hold tab, or tap Add to enter one by hand.</div>'}`;
+    ${items.length ? `<div class="chartcard"><h4>Max hold progress</h4>
+      <div class="seg" role="group" aria-label="Chart spacing">
+        <button type="button" data-act="chart" data-cm="attempt" aria-selected="${chartMode === 'attempt'}">Per attempt</button>
+        <button type="button" data-act="chart" data-cm="date" aria-selected="${chartMode === 'date'}">By date</button>
+      </div>${maxChart(items.slice().reverse(), chartMode)}<p>${chartMode === 'date' ? 'Each dot sits at the day it was recorded.' : 'Oldest to newest, evenly spaced.'} The orange dot is your best.</p></div><ul class="list">${rows}</ul>` : '<div class="empty">No max holds saved yet.<br>Use the Max hold tab, or tap Add to enter one by hand.</div>'}`;
 }
 function openMaxEditor(entry) {
   const isNew = !entry;

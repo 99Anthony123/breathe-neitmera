@@ -1192,7 +1192,15 @@ function mSetUi() {
   $('#m-cancel').hidden = hold;
   $('#m-barwrap').hidden = hold || m.relaxMs <= 0;
 }
-const VOICE_MARKS = { 60: 'One minute', 30: 'Thirty seconds', 5: 'Five', 4: 'Four', 3: 'Three', 2: 'Two', 1: 'One' };
+const NUM_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen', 'Twenty', 'Twenty one', 'Twenty two', 'Twenty three', 'Twenty four', 'Twenty five', 'Twenty six', 'Twenty seven', 'Twenty eight', 'Twenty nine', 'Thirty'];
+// What the voice says when this many whole seconds are left: every full minute, 30 s, 10 s, and the last 5 s.
+function voiceWord(sec) {
+  if (sec >= 60 && sec % 60 === 0) { const n = sec / 60; return (NUM_WORDS[n] || n) + (n === 1 ? ' minute' : ' minutes'); }
+  if (sec === 30) return 'Thirty seconds';
+  if (sec === 10) return 'Ten seconds';
+  if (sec >= 1 && sec <= 5) return NUM_WORDS[sec];
+  return '';
+}
 function mTick() {
   const m = mh; if (!m) return;
   const now = performance.now();
@@ -1204,7 +1212,7 @@ function mTick() {
       if (rem <= 0) { mStartHold(); return; }
       const sec = Math.ceil(rem / 1000);
       $('#m-big').textContent = fmt(sec); $('#m-bar').style.width = (el / m.relaxMs * 100).toFixed(1) + '%';
-      const word = VOICE_MARKS[sec];
+      const word = voiceWord(sec);
       if (word && !m.said[sec]) { m.said[sec] = 1; say(word); }
     } else $('#m-big').textContent = fmt(Math.floor(el / 1000));
   } else {
